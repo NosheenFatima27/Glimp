@@ -9,15 +9,76 @@ vignette: >
   %\VignetteEncoding{UTF-8}
 ---
 
+
 ```{r setup, include=FALSE}
 library(knitr)
 knitr::opts_chunk$set(echo = TRUE)
 ```
+### Table of Contents
+1. [Introduction](#introduction)
+2. [Logo](#logo)
+3. [Installation Guide](#installation-guide)
+4. [Package Log](#package-log)
+5. [Understanding Input File Structure](#understanding-input-file-structure)
+6. [Load Required Libraries](#load-required-libraries)
+7. [Define GWAS Function](#define-gwas-function)
+8. [Generate Visualization](#generate-visualization)
 
-## Introduction
+
+## 1.  Introduction
 This document presents a framework for performing genome-wide association studies (GWAS) using a generalized linear model (GLM). The package integrates principal component analysis (PCA) to account for population structure, enhancing the accuracy of association testing. Following the analysis, it provides visualization tools, including Manhattan plots for SNP significance mapping and quantile-quantile (QQ) plots to assess the model fit and p-value distributions.
 
-## File Structure
+## 2.  Logo
+```{r, echo=FALSE}
+# Check if the file exists before including
+logo_path <- "/Glimp/man/figures/logo.png/figures/logo.png"
+
+if (file.exists(logo_path)) {
+  knitr::include_graphics(logo_path)
+} else {
+  message("⚠️ Logo file not found: ", logo_path)
+}
+```
+## 3.  Installation Guide
+If you have not installed R or RStudio, you can download them based on your requirements:
+
+- **R**: Download from [CRAN](https://cran.r-project.org/).
+- **RStudio**: Download from [Posit](https://posit.co/download/rstudio-desktop/).
+
+### Installing Glimp from GitHub
+To download files off GitHub, first, install and load the `devtools` package
+
+Now, install the Glimp package from GitHub:
+
+```{r}
+devtools::install_github("NosheenFatima27/Glimp")  
+library(Glimp)
+```
+
+```{r, echo=FALSE}
+# Define absolute path for the logo
+logo_path <- normalizePath("/Users/nosheenfatima/Desktop/Glimp/man/figures/logo.png", mustWork = FALSE)
+
+if (file.exists(logo_path)) {
+  knitr::include_graphics(logo_path)
+} else {
+  cat("⚠️ Logo file not found at:", logo_path, "\n")
+}
+```
+
+
+## 4.  Package Log
+The following packages are required and used in this analysis:
+
+```{r}
+# Load necessary packages
+library(ggplot2)  # For plotting Manhattan and QQ plots
+library(knitr)    # For dynamic report generation
+library(kableExtra) # For improved table rendering
+```
+
+
+## 5. Understaing input File Structure
 The following files are required:
 
 - **GD1.csv**: Genotype matrix (taxa in rows, SNPs in columns).
@@ -47,31 +108,32 @@ for (name in names(example_data)) {
 
 ```
 
-## Load Required Libraries
+## 6. Load Required Libraries
 ```{r}
 library(ggplot2)
 library(knitr)
 ```
 
-## Define GWAS Function
+## 7. Define GWAS Function
 ```{r}
 gwas_glm <- function(y, X, C = NULL, include_pcs = FALSE, npcs = 5) {
+  # Ensure response variable length matches genotype data rows
   if (length(y) != nrow(X)) stop("Length of y must match the number of rows in X.")
   if (!is.null(C) && nrow(C) != length(y)) stop("Number of rows in C must match length of y.")
-
+ # If PCA adjustment is enabled, compute principal components
   if (include_pcs) {
     C <- pca_adjustment(X, C, npcs)$adjusted_covariates
   }
 
-  m <- ncol(X)
-  pvals <- numeric(m)
-
+  m <- ncol(X) # Number of SNPs
+  pvals <- numeric(m) # Initialize vector to store p values
+# Loop through each SNP to fit GLM model
   for (i in 1:m) {
-    model_data <- data.frame(y = y, marker = X[, i])
-    if (!is.null(C)) model_data <- cbind(model_data, C)
+    model_data <- data.frame(y = y, marker = X[, i])# Create dataset for modeling
+    if (!is.null(C)) model_data <- cbind(model_data, C)#Include covariates if provided
 
     fit <- tryCatch(
-      glm(y ~ ., data = model_data, family = gaussian()),
+      glm(y ~ ., data = model_data, family = gaussian()),# Fit GLM model
       error = function(e) {
         warning(paste("GLM failed for marker", i, "- setting p-value to 1"))
         return(NULL)
@@ -81,20 +143,21 @@ gwas_glm <- function(y, X, C = NULL, include_pcs = FALSE, npcs = 5) {
     if (!is.null(fit)) {
       coef_summary <- summary(fit)$coefficients
       if ("marker" %in% rownames(coef_summary)) {
-        pvals[i] <- coef_summary["marker", "Pr(>|t|)"]
+        pvals[i] <- coef_summary["marker", "Pr(>|t|)"]# Extract p-value
       } else {
-        pvals[i] <- 1
+        pvals[i] <- 1# Assign maximum p-value if marker is absent
       }
     } else {
-      pvals[i] <- 1
+      pvals[i] <- 1# Assign maximum p-value if GLM fails
     }
   }
 
-  return(pvals)
+  return(pvals)# Return p-valuees
 }
 ```
 
-## Define Manhattan and QQ Plot Functions
+
+## 8. Define Manhattan and QQ Plot Functions
 ```{r}
 manhattan_plot <- function(pvals, myGM) {
   plot_data <- data.frame(
@@ -146,7 +209,7 @@ print(head(pvals, 10))
 # Print summary statistics
 cat("GWAS Completed!\n")
 ```
-## Define MAF function and call significant SNPs
+## run MAF function and call significant SNPs
 ```{r}
 X_maf <- X  # Create a copy
 for (col in colnames(X_maf)) {
@@ -187,3 +250,5 @@ if (length(significant_snps) > 0) {
 manhattan_plot(pvals, myGM)
 qq_plot(pvals)
 ```
+
+
