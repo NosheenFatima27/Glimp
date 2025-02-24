@@ -447,7 +447,8 @@ X &lt;- X[, !zero_variance_snps]</code></pre>
 </div>
 <div id="simulate-phenotypes" class="section level2">
 <h2>Simulate Phenotypes</h2>
-<pre class="r"><code>set.seed(99164)
+<pre class="r"><code>nrep=30
+set.seed(99164)
 mySim &lt;- G2P(X = X, h2 = 0.7, alpha = 1, NQTN = min(20, ncol(X)), distribution = &quot;norm&quot;)
 mySim$y &lt;- as.numeric(mySim$y)</code></pre>
 </div>
