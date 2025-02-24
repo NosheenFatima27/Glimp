@@ -158,14 +158,43 @@ ggplot(comparison_long, aes(x = Metric, y = Value, fill = Model)) +
   labs(title = "Comparison of GWAS Methods", x = "Metric", y = "Value") +
   theme_minimal()
 
+# Define colors for different GWAS methods
+theColor <- c("red", "blue")  # Red for GLM-Based GWAS, Blue for GWASbyCor
 
+# Compute FDR values for each method
+fdr_values <- data.frame(
+  `GLM-Based GWAS` = sort(pvals_gwas_glm, decreasing = FALSE),
+  `GWASbyCor` = sort(pvals_gwasCor, decreasing = FALSE)
+)
+
+# Compute power (cumulative proportion of discoveries)
+power <- seq(0, 1, length.out = nrow(fdr_values))
+
+# Plot Power vs. FDR for the first method with thinner lines
+plot(fdr_values[, 1], power, type = "b", col = theColor[1], pch = 1, lwd = 1, cex = 0.6,
+     xlab = "False Discovery Rate (FDR)", ylab = "Power",
+     main = "Power vs. FDR Comparison", xlim = c(0, 1), ylim = c(0, 1))
+
+# Add Power vs. FDR for the second method with thinner lines
+lines(fdr_values[, 2], power, type = "b", col = theColor[2], pch = 2, lwd = 1, cex = 0.6)
+
+# Add legend inside the plot with adjusted point size
+legend("topleft", legend = colnames(fdr_values), col = theColor, lwd = 1, pch = 1:2, bg = "white", cex = 0.8)
 ```
-## **Conclusion**
-Both methods have their strengths and weaknesses:
 
-- **GLM-Based GWAS** excels in reliability (**lower FDR**), meaning it reduces false positives and provides more robust results.
+
+## **Conclusion**
+The comparison of GLM-Based GWAS and GWASbyCor methods using a Power vs. False Discovery Rate (FDR) analysis reveals distinct performance characteristics. GWASbyCor exhibits consistently higher statistical power across all FDR thresholds, indicating a greater ability to detect true associations. However, this increased sensitivity comes at the potential cost of a higher false positive rate. In contrast, GLM-Based GWAS demonstrates a more conservative approach, maintaining a lower power but potentially improving the robustness of detected associations by minimizing false discoveries.
+
+These findings suggest that GWASbyCor is better suited for studies prioritizing the identification of a larger number of putative associations, particularly in discovery-driven research, whereas GLM-Based GWAS may be more appropriate in contexts where controlling false positives is paramount, such as validation studies or when working with smaller datasets. The selection of an appropriate GWAS method should thus be guided by the specific objectives of the study, balancing the trade-off between detection power and false discovery control.
+
+## **Take away**
+Both methods have their strengths and weaknesses:
+  
+  - **GLM-Based GWAS** excels in reliability (**lower FDR**), meaning it reduces false positives and provides more robust results.
 - **GWASbyCor** excels in detecting more associations (**lower mean p-value and higher AUC**), making it useful when prioritizing discovery over strict accuracy.
 
+
 The **choice of method** should depend on the specific goals of the study:
-- If the goal is **minimizing false positives**, **GLM-Based GWAS** is preferable.
+  - If the goal is **minimizing false positives**, **GLM-Based GWAS** is preferable.
 - If the goal is **maximizing detection power**, **GWASbyCor** is a better option.
