@@ -1,0 +1,18 @@
+Package: Glimp
+Title: A Package for GWAS Analysis and Comparison
+Version: 0.1.0
+Authors@R: 
+    person("Nosheen", "Fatima", email = "nosheen.fatima@wsu.edu", role = c("aut", "cre"))
+Description: This package provides functions for Genome-Wide Association Studies (GWAS), 
+    including GLM-based GWAS with PCA adjustment and comparative analysis with GWASbyCor.
+     A detailed user manual is available in `inst/doc/User_Manual_Glimp.pdf`.
+License: MIT
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Suggests: 
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
+Imports: 
+    ggplot2

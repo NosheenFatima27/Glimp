@@ -1,0 +1,171 @@
+---
+title: "Comparison of GWAS Models"
+author: "NosheenFatima"
+date: "`23/02/2025`"
+output: html_document
+vignette: >
+  %\VignetteIndexEntry{Comparison of GWAS Models}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+library(devtools)
+library(ggplot2)
+library(pROC)
+library(tidyr)
+knitr::opts_chunk$set(echo = TRUE)
+
+# Load external functions
+source("http://zzlab.net/StaGen/2020/R/G2P.R")  # Simulating phenotype
+source("http://zzlab.net/StaGen/2020/R/GWASbyCor.R")  # GWASbyCor function
+```
+
+## Introduction
+This document compares GWAS models using simulated phenotype data. The models evaluated are:
+- **GLM-Based GWAS with PCA Adjustment**
+- **GWASbyCor**
+ ## Access the User Manual
+For more details on using the **Glimp** package, refer to the **User Manual** stored in the package:
+
+[Click here to access the User Manual](../doc/User_Manual_Glimp.html)
+
+## File Structure
+The following files are required:
+- **Covariates.csv**: Population structure covariates.
+- **Genotype.csv**: SNP genotype matrix.
+
+## Define GWAS Function
+
+```{r}
+#' GLM-Based GWAS Function
+gwas_glm <- function(y, X, C, include_pcs = TRUE, npcs = 3) {
+  if (length(y) != nrow(X)) stop("Length of y must match the number of rows in X.")
+  if (!is.null(C) && nrow(C) != length(y)) stop("Number of rows in C must match length of y.")
+  
+  if (include_pcs) {
+    C <- pca_adjustment(X, C, npcs)$adjusted_covariates
+  }
+  
+  m <- ncol(X)
+  pvals <- numeric(m)
+  
+  for (i in 1:m) {
+    model_data <- data.frame(y = y, marker = X[, i])
+    if (!is.null(C)) model_data <- cbind(model_data, C)
+    
+    fit <- tryCatch(
+      glm(y ~ ., data = model_data, family = gaussian()),
+      error = function(e) {
+        warning(paste("GLM failed for marker", i, "- setting p-value to 1"))
+        return(NULL)
+      }
+    )
+    
+    if (!is.null(fit)) {
+      coef_summary <- summary(fit)$coefficients
+      if ("marker" %in% rownames(coef_summary)) {
+        pvals[i] <- coef_summary["marker", "Pr(>|t|)"]
+      } else {
+        pvals[i] <- 1
+      }
+    } else {
+      pvals[i] <- 1
+    }
+  }
+  return(pvals)
+}
+
+#' PCA Adjustment Function
+pca_adjustment <- function(X, C = NULL, npcs = 5) {
+  npcs <- min(npcs, ncol(X))
+  pcs <- prcomp(X)$x[, 1:npcs, drop = FALSE]
+  
+  if (!is.null(C)) {
+    combined <- cbind(C, pcs)
+    rank_combined <- qr(combined)$rank
+    rank_C <- qr(C)$rank
+    if (rank_combined == rank_C) {
+      warning("Some PCs are linearly dependent with covariates. Excluding dependent PCs.")
+      pcs <- pcs[, (rank_C + 1):npcs, drop = FALSE]
+    }
+  }
+  
+  return(list(adjusted_covariates = if (!is.null(C)) cbind(C, pcs) else pcs, pcs = pcs))
+}
+```
+
+## Load Data
+
+```{r}
+covariates <- read.csv("/Users/nosheenfatima/Documents/WSU course folders/Statistical Genomics/HW1/Demodata/Covariates.csv", stringsAsFactors = FALSE)
+genotype <- read.csv("/Users/nosheenfatima/Documents/WSU course folders/Statistical Genomics/HW1/Demodata/genotype.csv", stringsAsFactors = FALSE)
+
+C <- as.matrix(covariates[, -1])
+C <- apply(C, 2, as.numeric)
+X <- as.matrix(genotype[, -1])
+storage.mode(X) <- "numeric"
+
+if (nrow(C) != nrow(X)) stop("Error: Covariates and genotype data have different row numbers!")
+X[is.na(X)] <- mean(X, na.rm = TRUE)
+zero_variance_snps <- apply(X, 2, function(col) var(col, na.rm = TRUE) == 0)
+X <- X[, !zero_variance_snps]
+```
+
+## Simulate Phenotypes
+```{r}
+set.seed(99164)
+mySim <- G2P(X = X, h2 = 0.7, alpha = 1, NQTN = min(20, ncol(X)), distribution = "norm")
+mySim$y <- as.numeric(mySim$y)
+```
+
+## Run GWAS Methods
+```{r}
+pvals_gwas_glm <- gwas_glm(y = mySim$y, X = X, C = C, include_pcs = TRUE, npcs = 5)
+pvals_gwasCor <- GWASbyCor(X = X, y = mySim$y)
+```
+
+## Compute and Plot ROC Curves
+```{r}
+true_labels <- rep(0, ncol(X))
+true_labels[1:min(10, ncol(X))] <- 1
+
+roc_gwas_glm <- roc(response = true_labels, predictor = -log10(pvals_gwas_glm))
+roc_gwasCor <- roc(response = true_labels, predictor = -log10(pvals_gwasCor))
+
+# Compute FDR
+fdr_glm <- sum(pvals_gwas_glm < 0.05, na.rm = TRUE) / length(pvals_gwas_glm)
+fdr_gwasCor <- sum(pvals_gwasCor < 0.05, na.rm = TRUE) / length(pvals_gwasCor)
+
+# Create Comparison Table
+comparison_results <- data.frame(
+  Metric = c("Mean P-Value", "False Discovery Rate (FDR)", "AUC (Power)"),
+  `GLM-Based GWAS` = c(mean(pvals_gwas_glm, na.rm = TRUE), fdr_glm, auc(roc_gwas_glm)),
+  `GWASbyCor` = c(mean(pvals_gwasCor, na.rm = TRUE), fdr_gwasCor, auc(roc_gwasCor))
+)
+print(comparison_results)
+```
+
+## Visualization
+```{r}
+# Convert data from wide to long format
+comparison_long <- pivot_longer(comparison_results, cols = -Metric, names_to = "Model", values_to = "Value")
+
+# Plot Mean P-Value, FDR, and AUC in a single bar plot
+ggplot(comparison_long, aes(x = Metric, y = Value, fill = Model)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Comparison of GWAS Methods", x = "Metric", y = "Value") +
+  theme_minimal()
+
+
+```
+## **Conclusion**
+Both methods have their strengths and weaknesses:
+
+- **GLM-Based GWAS** excels in reliability (**lower FDR**), meaning it reduces false positives and provides more robust results.
+- **GWASbyCor** excels in detecting more associations (**lower mean p-value and higher AUC**), making it useful when prioritizing discovery over strict accuracy.
+
+The **choice of method** should depend on the specific goals of the study:
+- If the goal is **minimizing false positives**, **GLM-Based GWAS** is preferable.
+- If the goal is **maximizing detection power**, **GWASbyCor** is a better option.
